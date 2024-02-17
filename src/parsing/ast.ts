@@ -3,13 +3,19 @@ export type NodeType =
   | 'IntegerLiteral'
   | 'DecimalLiteral'
   | 'BinaryExpression'
+  | 'StringLiteral'
   | 'Identifier'
   | 'Symbol'
   | 'CallExpression'
   | 'UnaryExpression'
   | 'FunctionDeclaration'
   | 'NullLiteral'
-  | 'VariableDeclaration';
+  | 'VariableDeclaration'
+  | 'AssignmentExpression'
+  | 'Property'
+  | 'ObjectLiteral'
+  | 'MemberExpression'
+  | 'CallExpression';
 
 
 export interface Statement {
@@ -53,4 +59,46 @@ export interface DecimalLiteral extends Expression {
 export interface NullLiteral extends Expression {
   kind: 'NullLiteral';
   value: 'null';
+}
+
+export interface VariableDeclaration extends Statement {
+  kind: 'VariableDeclaration';
+  constant: boolean;
+  varname: string;
+  value?: Expression;
+}
+
+export interface StringLiteral extends Expression {
+  kind: 'StringLiteral';
+  value: string;
+}
+
+export interface AssignmentExpression extends Expression {
+  kind: 'AssignmentExpression';
+  target: Expression;
+  value: Expression;
+}
+
+export interface Property extends Expression {
+  kind: 'Property';
+  key: string;
+  value?: Expression;
+}
+
+export interface ObjectLiteral extends Expression {
+  kind: 'ObjectLiteral';
+  properties: Property[];
+}
+
+export interface CallExpression extends Expression {
+  kind: 'CallExpression';
+  arguments: Expression[];
+  caller: Expression;
+}
+
+export interface MemberExpression extends Expression {
+  kind: 'MemberExpression';
+  object: Expression;
+  property: Expression;
+  computed: boolean;
 }

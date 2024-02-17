@@ -77,6 +77,8 @@ export class UnexpectedTokenError extends Exception {
 }
 
 export class ParserError extends Exception {
+  public readonly name = 'ParserError' as const;
+
   constructor(message: string, token: Token, ctx?: Dict<any>) {
     super(`Parser error: ${message} for token in position ${token.locationInSource.position} (${token.type}, \`${token.value}\`) at line ${token.locationInSource.line}, column ${token.locationInSource.column}`,
       ctx);

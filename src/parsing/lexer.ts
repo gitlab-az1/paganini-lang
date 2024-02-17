@@ -12,6 +12,8 @@ export const enum TokenType {
   CloseParen,
   OpenBrace,
   CloseBrace,
+  OpenBracket,
+  CloseBracket,
   BinaryOperator,
   
   // Keywords
@@ -29,6 +31,9 @@ export const enum TokenType {
 
   // Control 
   SemiColon,
+  Dot,
+  Colon,
+  Comma,
   EOF,
 }
 
@@ -38,16 +43,20 @@ const basicMathOperators: readonly string[] = [
 ];
 
 const ignorables: readonly string[] = [
-  ' ', '\n', '\t',
+  ' ', '\n', '\r', '\r\n', '\t',
 ];
 
 const controlCharacters: readonly string[] = [
   ';',
+  '=',
+  ',',
+  ':',
+  '.',
 ];
 
 const keywords: ReadonlyDict<TokenType> = {
   let: TokenType.Let,
-  cosnt: TokenType.Const,
+  const: TokenType.Const,
   symbol: TokenType.Symbol,
   if: TokenType.If,
   then: TokenType.Then,
@@ -61,6 +70,10 @@ const keywords: ReadonlyDict<TokenType> = {
 
 const controls: ReadonlyDict<TokenType> = {
   ';': TokenType.SemiColon,
+  '=': TokenType.Equals,
+  ',': TokenType.Comma,
+  ':': TokenType.Colon,
+  '.': TokenType.Dot,
 };
 
 
@@ -93,9 +106,7 @@ function _isInt(s: string): boolean {
 
 function _isFloat(s: string): boolean {
   if(_isAlpha(s)) return false;
-  if(!/^[0-9]*\.?[0-9]*$/.test(s)) return false;
-
-  return true;
+  return /^[0-9]*\.?[0-9]*$/.test(s);
 }
 
 
@@ -127,6 +138,8 @@ export class Lexer {
     const tokens = [] as Token[];
 
     while(this._char != null && this._position < this._characters.length) {
+      const isPowerOperator = this._char === '*' && this._characters[this._position + 1] === '*';
+
       if(this._char === '(') {
         tokens.push({
           type: TokenType.OpenParen,
@@ -153,9 +166,9 @@ export class Lexer {
         });
 
         this._next();
-      } else if(basicMathOperators.includes(this._char)) {
+      } else if(this._char === '[') {
         tokens.push({
-          type: TokenType.BinaryOperator,
+          type: TokenType.OpenBrace,
           value: this._char,
           locationInSource: {
             column: this._column,
@@ -166,9 +179,9 @@ export class Lexer {
         });
 
         this._next();
-      } else if(this._char === '=') {
+      } else if(this._char === ']') {
         tokens.push({
-          type: TokenType.Equals,
+          type: TokenType.CloseBrace,
           value: this._char,
           locationInSource: {
             column: this._column,
@@ -177,6 +190,80 @@ export class Lexer {
             filename: this._props?.filename,
           },
         });
+
+        this._next();
+      } else if(this._char === '{') {
+        tokens.push({
+          type: TokenType.OpenBracket,
+          value: this._char,
+          locationInSource: {
+            column: this._column,
+            line: this._line,
+            position: this._position,
+            filename: this._props?.filename,
+          },
+        });
+
+        this._next();
+      } else if(this._char === '}') {
+        tokens.push({
+          type: TokenType.CloseBracket,
+          value: this._char,
+          locationInSource: {
+            column: this._column,
+            line: this._line,
+            position: this._position,
+            filename: this._props?.filename,
+          },
+        });
+
+        this._next();
+      } else if(this._char === '/' && this._characters[this._position + 1] === '/') {
+        this._next();
+        this._next();
+
+        // @ts-expect-error Overloap for `this._char` is intentional because method next is called before this line checking for "/" and then consuming this character and so checking for a comment
+        while(this._char !== '\n' && this._char !== null) {
+          this._next();
+        }
+      } else if(this._char === '-') {
+        this._next();
+        let n = '';
+  
+        // @ts-expect-error Overloap for `this._char` is intentional because method next is called before this line checking for "-" and then consuming this character and so checking for a number
+        while(this._char !== null && (_isInt(this._char) || this._char === '.')) {
+          n += this._char;
+          this._next();
+        }
+        
+        const isDecimal = _isFloat(n);
+        this._next();
+  
+        tokens.push({
+          type: isDecimal ? TokenType.Decimal : TokenType.Integer,
+          value: `-${n}`,
+          locationInSource: {
+            column: this._column,
+            line: this._line,
+            position: this._position,
+            filename: this._props?.filename,
+          },
+        });
+      } else if(basicMathOperators.includes(this._char) || isPowerOperator) {
+        tokens.push({
+          type: TokenType.BinaryOperator,
+          value: isPowerOperator ? '**' : this._char,
+          locationInSource: {
+            column: this._column,
+            line: this._line,
+            position: this._position,
+            filename: this._props?.filename,
+          },
+        });
+
+        if(isPowerOperator) {
+          this._next();
+        }
 
         this._next();
       } else if(controlCharacters.includes(this._char)) {
@@ -203,12 +290,40 @@ export class Lexer {
         });
 
         this._next();
+      } else if(this._char === '"') {
+        let str = '';
+  
+        while(this._char !== null && this._char !== '"') {
+          str += this._char;
+          this._next();
+        }
+
+        if(str.charAt(0) === '"') {
+          str = str.slice(1);
+        }
+
+        if(str.charAt(str.length - 1) === '"') {
+          str = str.slice(0, -1);
+        }
+  
+        tokens.push({
+          type: TokenType.String,
+          value: str,
+          locationInSource: {
+            column: this._column,
+            line: this._line,
+            position: this._position,
+            filename: this._props?.filename,
+          },
+        });
+
+        this._next();
       } else {
         if(_isFloat(this._char)) {
           let n = '';
 
           // Keep consuming characters until it's not a digit or a dot
-          while (this._char !== null && (/^\d$/.test(this._char) || this._char === '.')) {
+          while(this._char !== null && (/^\d$/.test(this._char) || this._char === '.')) {
             n += this._char;
             this._next();
           }
@@ -274,29 +389,8 @@ export class Lexer {
               },
             });
           }
-        } else if(this._char === '"') {
-          let str = '';
-          this._next();
-    
-          while(this._char !== null && this._char !== '"') {
-            str += this._char;
-            this._next();
-          }
-    
-          this._next();
-    
-          tokens.push({
-            type: TokenType.String,
-            value: str,
-            locationInSource: {
-              column: this._column,
-              line: this._line,
-              position: this._position,
-              filename: this._props?.filename,
-            },
-          });
         } else if(ignorables.includes(this._char)) {
-          if(this._char === '\n') {
+          if(this._char === '\n' || this._char === '\r' || this._char === '\r\n') {
             this._line++;
             this._column = 1;
           } else if(this._char === '\t') {
